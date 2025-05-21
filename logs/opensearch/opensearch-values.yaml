@@ -9,7 +9,6 @@ dashboards:
     limits:
       cpu: 1
       memory: 1Gi
-  replicaCount: 1
 
 # 보안설정
 extraEnvs:
@@ -22,7 +21,6 @@ service:
   type: ClusterIP
 
 coordinating:
-  replicaCount: 1
   resources:
     requests:
       memory: 500Mi
@@ -33,7 +31,6 @@ coordinating:
 
 # 데이터 노드 (데이터 저장 및 검색용))
 data:
-  replicaCount: 1
   resources:
     requests:
       cpu: 1
@@ -49,7 +46,6 @@ data:
 
 # 인제스트 노드 (데이터 전처리용))
 ingest:
-  replicaCount: 1
   resources:
     requests:
       memory: 500Mi
@@ -60,7 +56,6 @@ ingest:
 
 # 마스터 노드 (클러스터 관리용)
 master:
-  replicaCount: 1
   resources:
     requests:
       memory: 500Mi
