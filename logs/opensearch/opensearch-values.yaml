@@ -1,98 +1,59 @@
-singleNode: true  # 로컬 K8s라면 단일 노드 권장
+clusterName: "opensearch-cluster"
+nodeGroup: "master"
 
-dashboards:
-  enabled: true
-  resources:
-    requests:
-      cpu: 500m
-      memory: 512Mi
-    limits:
-      cpu: 1
-      memory: 1Gi
+# 단일 노드 설정 (개발환경 용도)
+# 프로덕션 환경에서는 false로 설정하고 replicas를 3으로 설정하는 것이 좋습니다.
+singleNode: false
 
-# 보안설정
+# 마스터 서비스 이름 설정
+masterService: "opensearch-cluster-master"
+
+# 노드 역할 설정
+roles:
+  - master
+  - ingest
+  - data
+  - remote_cluster_client
+
+# 복제본 수 설정 (프로덕션은 최소 3개 권장)
+replicas: 3
+
+# 리소스 설정
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "2Gi"
+  limits:
+    cpu: "2000m"
+    memory: "4Gi"
+
+# JVM 힙 크기 설정 (리소스의 50% 정도로 설정하는 것이 좋음)
+opensearchJavaOpts: "-Xmx2g -Xms2g"
+
+# OpenSearch 2.12.0 이상 버전에서는 초기 관리자 비밀번호 설정 필요
 extraEnvs:
-  - name: DISABLE_SECURITY_PLUGIN
-    value: "false"  # 테스트에서는 true 사용 (보안 설정)
+  - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+    value: "YourStrongPassword123!"  # 실제 환경에서는 안전한 비밀번호로 변경하세요
 
-service:
-  ports:
-    http: 9200
-  type: ClusterIP
-
-coordinating:
-  resources:
-    requests:
-      memory: 500Mi
-      cpu: 500m
-    limits:
-      memory: 1024Mi
-      cpu: 1
-
-# 데이터 노드 (데이터 저장 및 검색용))
-data:
-  resources:
-    requests:
-      cpu: 1
-      memory: 1024Mi
-    limits:
-      cpu: 2
-      memory: 2Gi
-  heapSize: 1024m # JVM 힙 크기
-#  podAntiAffinity:
-#    type: soft # 가능한 분산 배치하되 강제하지 않음
-#    weight: 100
-
-
-# 인제스트 노드 (데이터 전처리용))
-ingest:
-  resources:
-    requests:
-      memory: 500Mi
-      cpu: 500m
-    limits:
-      memory: 1024Mi
-      cpu: 1
-
-# 마스터 노드 (클러스터 관리용)
-master:
-  resources:
-    requests:
-      memory: 500Mi
-      cpu: 500m
-    limits:
-      memory: 1024Mi
-      cpu: 1
-
-sysctlImage:
-  resources:
-    requests:
-      memory: 500Mi
-      cpu: 500m
-    limits:
-      memory: 1024Mi
-      cpu: 1
-
+# 퍼시스턴트 볼륨 설정
 persistence:
-  enabled: false  # 테스트 환경이면 디스크 영속성 끔 (옵션)
-#  storageClass: "gp2"
-#  size: 100Gi
-
-
-# 인덱스 수명 주기 관리
-indexManagement:
   enabled: true
-  scheduledJobs:
-    enabled: true
-    jobs:
-      - name: rollover-job
-        cron: "0 0 * * *"  # 매일 자정
-        action: rollover
-        conditions:
-          max_age: "1d"
-          max_size: "20gb"
-      - name: delete-job
-        cron: "0 1 * * *"  # 매일 1시
-        action: delete
-        conditions:
-          min_age: "7d"    # 7일 이상 된 인덱스 삭제
+  accessModes:
+    - ReadWriteOnce
+  size: 30Gi
+  storageClass: "gp2"  # AWS EKS에서는 gp2 또는 gp3를 일반적으로 사용
+
+# 보안 설정
+securityConfig:
+  enabled: true
+  # 기본 데모 인증서로는 보안에 취약하므로 프로덕션에서는 사용하지 마세요
+  allowDefaultInitContainer: true
+
+# 서비스 설정
+service:
+  type: ClusterIP  # 클러스터 내부에서만 접근 가능
+  # LoadBalancer로 변경하면 외부에서 접근 가능
+
+# Ingress 설정 (필요한 경우)
+ingress:
+  enabled: false
