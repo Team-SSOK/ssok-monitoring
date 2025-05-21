@@ -16,7 +16,7 @@ roles:
   - remote_cluster_client
 
 # 복제본 수 설정 (프로덕션은 최소 3개 권장)
-replicas: 3
+replicas: 1
 
 # 리소스 설정
 resources:
