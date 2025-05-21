@@ -1,0 +1,102 @@
+singleNode: false  # 로컬 K8s라면 단일 노드 권장
+
+dashboards:
+  enabled: true
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  replicaCount: 1
+
+# 보안설정
+extraEnvs:
+  - name: DISABLE_SECURITY_PLUGIN
+    value: "false"  # 테스트에서는 true 사용 (보안 설정)
+
+service:
+  ports:
+    http: 9200
+  type: ClusterIP
+
+coordinating:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 500Mi
+      cpu: 500m
+    limits:
+      memory: 1024Mi
+      cpu: 1
+
+# 데이터 노드 (데이터 저장 및 검색용))
+data:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 1
+      memory: 1024Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+  heapSize: 1024m # JVM 힙 크기
+  podAntiAffinity:
+    type: soft # 가능한 분산 배치하되 강제하지 않음
+    weight: 100
+
+
+# 인제스트 노드 (데이터 전처리용))
+ingest:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 500Mi
+      cpu: 500m
+    limits:
+      memory: 1024Mi
+      cpu: 1
+
+# 마스터 노드 (클러스터 관리용)
+master:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 500Mi
+      cpu: 500m
+    limits:
+      memory: 1024Mi
+      cpu: 1
+
+sysctlImage:
+  resources:
+    requests:
+      memory: 500Mi
+      cpu: 500m
+    limits:
+      memory: 1024Mi
+      cpu: 1
+
+persistence:
+  enabled: true  # 테스트 환경이면 디스크 영속성 끔 (옵션)
+  storageClass: "gp2"
+  size: 100Gi
+
+# 인덱스 수명 주기 관리
+indexManagement:
+  enabled: true
+  scheduledJobs:
+    enabled: true
+    jobs:
+      - name: rollover-job
+        cron: "0 0 * * *"  # 매일 자정
+        action: rollover
+        conditions:
+          max_age: "1d"
+          max_size: "20gb"
+      - name: delete-job
+        cron: "0 1 * * *"  # 매일 1시
+        action: delete
+        conditions:
+          min_age: "7d"    # 7일 이상 된 인덱스 삭제
