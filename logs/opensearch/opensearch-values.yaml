@@ -1,4 +1,4 @@
-singleNode: false  # 로컬 K8s라면 단일 노드 권장
+singleNode: true  # 로컬 K8s라면 단일 노드 권장
 
 dashboards:
   enabled: true
@@ -42,9 +42,9 @@ data:
       cpu: 2
       memory: 2Gi
   heapSize: 1024m # JVM 힙 크기
-  podAntiAffinity:
-    type: soft # 가능한 분산 배치하되 강제하지 않음
-    weight: 100
+#  podAntiAffinity:
+#    type: soft # 가능한 분산 배치하되 강제하지 않음
+#    weight: 100
 
 
 # 인제스트 노드 (데이터 전처리용))
@@ -79,9 +79,10 @@ sysctlImage:
       cpu: 1
 
 persistence:
-  enabled: true  # 테스트 환경이면 디스크 영속성 끔 (옵션)
-  storageClass: "gp2"
-  size: 100Gi
+  enabled: false  # 테스트 환경이면 디스크 영속성 끔 (옵션)
+#  storageClass: "gp2"
+#  size: 100Gi
+
 
 # 인덱스 수명 주기 관리
 indexManagement:
