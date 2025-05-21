@@ -1,0 +1,5 @@
+helm repo add fluent https://fluent.github.io/helm-charts
+helm repo update
+
+kubectl apply -f fluentd-configmap.yaml
+helm install fluentd fluent/fluentd -f fluentd-values.yaml -n logging
