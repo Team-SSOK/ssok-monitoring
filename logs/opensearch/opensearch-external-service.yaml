@@ -1,0 +1,16 @@
+# opensearch-external-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensearch-service
+  namespace: ssok  # ingress가 있는 네임스페이스
+spec:
+  type: ExternalName
+  externalName: opensearch-cluster-master.logging.svc.cluster.local
+  ports:
+    - port: 9200
+      targetPort: 9200
+      name: http
+    - port: 9300
+      targetPort: 9300
+      name: transport
