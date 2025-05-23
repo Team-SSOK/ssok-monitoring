@@ -1,9 +1,7 @@
 clusterName: "opensearch-cluster"
 nodeGroup: "master"
 
-# AWS EKS 환경에 최적화
 singleNode: false
-
 masterService: "opensearch-cluster-master"
 
 roles:
@@ -12,10 +10,8 @@ roles:
   - data
   - remote_cluster_client
 
-# EKS에서는 최소 1개로 시작 (필요시 스케일업)
 replicas: 1
 
-# AWS EKS 리소스 설정 (EKS 노드 타입에 따라 조정)
 resources:
   requests:
     cpu: "1000m"
@@ -26,56 +22,40 @@ resources:
 
 opensearchJavaOpts: "-Xmx2g -Xms2g"
 
-extraEnvs:
-  - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
-    value: "tldpsdptm!"
+# Security Plugin 비활성화
+securityConfig:
+  enabled: false
 
-# AWS EKS 스토리지 설정
+# Security Plugin 완전 비활성화 설정
+extraEnvs:
+  - name: DISABLE_INSTALL_DEMO_CONFIG
+    value: "true"
+  - name: DISABLE_SECURITY_PLUGIN
+    value: "true"
+
 persistence:
   enabled: true
   accessModes:
     - ReadWriteOnce
   size: 30Gi
-  storageClass: "gp3"  # AWS EKS에서 gp3 사용 (더 성능 좋음)
-
-securityConfig:
-  enabled: true
-  allowDefaultInitContainer: true
+  storageClass: "gp3"
 
 service:
   type: ClusterIP
 
-# 네트워크 정책 설정 (다른 네임스페이스에서 접근 허용)
-networkPolicy:
-  enabled: false  # 네임스페이스 간 통신을 위해 비활성화
-
-# AWS EKS 특화 설정
-sysctlInit:
-  enabled: true  # vm.max_map_count 설정을 위해
-
-# 로그 수집을 위한 추가 설정
 config:
   opensearch.yml: |
     cluster.name: opensearch-cluster
     network.host: 0.0.0.0
     
-    # CORS 설정 (다른 네임스페이스에서 접근 시)
+    # Security Plugin 비활성화
+    plugins.security.disabled: true
+    
+    # CORS 설정
     http.cors.enabled: true
     http.cors.allow-origin: "*"
     http.cors.allow-methods: OPTIONS, HEAD, GET, POST, PUT, DELETE
     http.cors.allow-headers: X-Requested-With,X-Auth-Token,Content-Type,Content-Length
-    
-    # 보안 설정
-    plugins.security.ssl.http.enabled: false
-    plugins.security.ssl.transport.enabled: false
-    plugins.security.allow_default_init_securityindex: true
-    plugins.security.authcz.admin_dn:
-      - CN=kirk,OU=client,O=client,L=test,C=de
-    plugins.security.nodes_dn:
-      - 'CN=*.opensearch-cluster,OU=node,O=node,L=test,C=de'
-
-ingress:
-  enabled: false  # ssok 네임스페이스의 기존 ingress 사용
 
 #clusterName: "opensearch-cluster
 #nodeGroup: "master"
