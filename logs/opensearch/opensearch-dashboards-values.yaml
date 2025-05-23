@@ -37,13 +37,20 @@ config:
     # 보안 설정
     opensearch.ssl.verificationMode: none
     opensearch.requestHeadersWhitelist: ["authorization", "securitytenant"]
-    
-    # 로그 레벨
-    logging.level: info
+
 
 service:
   type: ClusterIP
   port: 5601
 
-ingress:
-  enabled: false  # ssok 네임스페이스의 기존 ingress 사용
+#     # 로깅 설정 수정 (새로운 형식)
+#    logging:
+#      appenders:
+#        default:
+#          type: console
+#          layout:
+#            type: json
+#      root:
+#        appenders:
+#          - default
+#        level: info
