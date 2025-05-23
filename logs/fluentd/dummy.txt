@@ -1,4 +1,4 @@
-helm repo add fluent https://fluent.github.io/helm-charts
+k
 helm repo update
 
 kubectl apply -f fluentd-configmap.yaml

@@ -1,12 +1,47 @@
 # values.yaml
 image:
   repository: fluent/fluentd-kubernetes-daemonset
-  tag: v1.16-debian-opensearch-1  # OpenSearch 플러그인이 포함된 이미지
+  tag: v1.16-debian-opensearch-1
   pullPolicy: IfNotPresent
 
 env:
   - name: FLUENTD_CONF
-    value: "fluentd-opensearch.conf"
+    value: "fluent.conf"
+
+# Helm에서 ConfigMap 자동 생성
+fileConfigs:
+  01_sources.conf: |
+    <source>
+      @type forward
+      port 24224
+      bind 0.0.0.0
+    </source>
+
+  02_filters.conf: ""
+  03_dispatch.conf: ""
+
+  04_outputs.conf: |
+    <match **>
+      @type opensearch
+      host opensearch-cluster-master.logging.svc.cluster.local
+      port 9200
+      scheme http
+      index_name fluentd-logs
+      logstash_format true
+      include_tag_key true
+      flush_interval 5s
+    
+      <buffer>
+        @type file
+        path /var/log/fluentd-buffers/opensearch
+        flush_mode interval
+        retry_type exponential_backoff
+        flush_interval 5s
+        retry_forever
+      </buffer>
+    </match>
+
+  fluent.conf: ""
 
 service:
   type: ClusterIP
@@ -20,44 +55,6 @@ resources:
     memory: 256Mi
     cpu: 100m
 
-# ConfigMap을 Helm에서 관리하도록 설정
-fileConfigs:
-  fluentd-opensearch.conf: |
-    # Forward input을 통해 Fluent Bit으로부터 로그 수신
-    <source>
-      @type forward
-      port 24224
-      bind 0.0.0.0
-    </source>
-
-    # 수신된 모든 로그를 OpenSearch로 전송
-    <match **>
-      @type opensearch
-      host opensearch-cluster-master.logging.svc.cluster.local
-      port 9200
-      scheme http
-      index_name fluentd-logs
-      logstash_format true
-      include_tag_key true
-      flush_interval 5s
-    
-      # 버퍼 설정
-      <buffer>
-        @type file
-        path /var/log/fluentd-buffers/opensearch
-        flush_mode interval
-        retry_type exponential_backoff
-        flush_thread_count 2
-        flush_interval 5s
-        retry_forever
-        retry_max_interval 30
-        chunk_limit_size 2M
-        queue_limit_length 8
-        overflow_action block
-      </buffer>
-    </match>
-
-# 추가 볼륨 설정 (버퍼용)
 extraVolumes:
   - name: buffer-storage
     emptyDir: {}
