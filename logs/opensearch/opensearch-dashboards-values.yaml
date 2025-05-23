@@ -8,7 +8,7 @@ extraEnvs:
   - name: OPENSEARCH_USERNAME
     value: "admin"
   - name: OPENSEARCH_PASSWORD
-    value: "tldpsdptm!"
+    value: "a1b2c3d4A1B2C3D4!"
   - name: SERVER_BASEPATH
     value: "/dashboards"  # sub-path 설정
   - name: SERVER_REWRITEBASEPATH
@@ -32,7 +32,7 @@ config:
     
     opensearch.hosts: ["http://opensearch-cluster-master.logging.svc.cluster.local:9200"]
     opensearch.username: "admin"
-    opensearch.password: "tldpsdptm!"
+    opensearch.password: "a1b2c3d4A1B2C3D4!"
     
     # 보안 설정
     opensearch.ssl.verificationMode: none
