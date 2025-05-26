@@ -54,6 +54,8 @@ resources:
 env:
   - name: FLUENTD_CONF
     value: "fluent.conf"
+  - name: FLUENTD_SYSTEMD_CONF
+    value: ""
   - name: FLUENT_OPENSEARCH_HOST
     value: "opensearch-cluster-master.logging.svc.cluster.local"
   - name: FLUENT_OPENSEARCH_PORT
