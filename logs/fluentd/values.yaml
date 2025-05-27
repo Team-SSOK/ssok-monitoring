@@ -796,7 +796,8 @@ aggregator:
   terminationGracePeriodSeconds: 30
   ## @param aggregator.extraGems List of extra gems to be installed. Can be used to install additional fluentd plugins.
   ##
-  extraGems: []
+  extraGems:
+    - fluent-plugin-opensearch
   ## @param aggregator.configFile Name of the config file that will be used by Fluentd at launch under the `/opt/bitnami/fluentd/conf` directory
   ##
   configFile: fluentd.conf
@@ -851,6 +852,22 @@ aggregator:
       <match **>
         @type stdout
       </match>
+      
+      <match **>
+          @type opensearch
+          @id out_opensearch
+          host opensearch-cluster-master.logging.svc.cluster.local
+          port 9200
+          scheme http
+          logstash_format true
+          logstash_prefix fluentd
+          logstash_dateformat %Y.%m.%d
+          include_timestamp true
+          reconnect_on_error true
+          reload_connections false
+          request_timeout 30s
+          with_credentials false
+        </match>
     metrics.conf: |
       # Prometheus Exporter Plugin
       # input plugin that exports metrics
