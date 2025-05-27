@@ -68,6 +68,12 @@ env:
     value: "true"
   - name: FLUENT_OPENSEARCH_LOGSTASH_PREFIX
     value: "fluentd"
+  - name: FLUENT_FORWARD_PORT
+    value: "24224"
+#  - name: FLUENTD_OPT
+#    value: "-q"
+#  - name: FLUENTD_LOG_LEVEL
+#    value: "debug"
 
 # 서비스 설정 - Forward 포트만
 service:
@@ -78,9 +84,12 @@ service:
       protocol: TCP
       containerPort: 24224
       port: 24224
+      targetPort: 24224
 
 # 기본 설정 완전 교체
-configMapConfigs: []
+configMapConfigs:
+  - name: fluentd-config-fluentd
+    mountPath: /fluentd/etc
 
 # 최소한의 설정만
 fileConfigs:
@@ -131,10 +140,15 @@ fileConfigs:
 volumes:
   - name: buffer-storage
     emptyDir: {}
+  - name: config-volume
+    configMap:
+      name: fluentd-config-fluentd
 
 volumeMounts:
   - name: buffer-storage
     mountPath: /var/log/fluentd-buffers
+  - name: config-volume
+    mountPath: /fluentd/etc
 
 # Kubernetes 로그 마운트 비활성화 (Fluent Bit이 담당)
 mountVarLogDirectory: false
@@ -142,6 +156,7 @@ mountDockerContainersDirectory: false
 
 # 모든 모니터링 비활성화
 metrics:
+  enabled: false
   serviceMonitor:
     enabled: false
   prometheusRule:
