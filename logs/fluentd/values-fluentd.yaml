@@ -1,0 +1,645 @@
+global:
+  imageRegistry: ""
+
+  imagePullSecrets: []
+  defaultStorageClass: ""
+  storageClass: ""
+
+  security:
+   allowInsecureImages: false
+
+  compatibility:
+    openshift:
+      adaptSecurityContext: auto
+
+kubeVersion: ""
+
+nameOverride: ""
+fullnameOverride: ""
+commonAnnotations: {}
+commonLabels: {}
+clusterDomain: cluster.local
+extraDeploy: []
+diagnosticMode:
+  enabled: false
+  command:
+    - sleep
+  args:
+    - infinity
+
+image:
+  registry: docker.io
+  repository: bitnami/fluentd
+  tag: 1.18.0-debian-12-r18
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+  debug: false
+
+forwarder:
+  enabled: true
+  daemonUser: root
+  daemonGroup: root
+  automountServiceAccountToken: true
+  hostAliases: []
+
+  podSecurityContext:
+    enabled: true
+    fsGroupChangePolicy: Always
+    sysctls: []
+    supplementalGroups: []
+    fsGroup: 0
+
+  containerSecurityContext:
+    enabled: true
+    seLinuxOptions: {}
+    runAsUser: 0
+    runAsGroup: 0
+    privileged: false
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: "RuntimeDefault"
+
+  hostNetwork: false
+
+  dnsPolicy: ""
+
+  terminationGracePeriodSeconds: 30
+
+  extraGems: []
+
+  configFile: fluentd.conf
+
+  configMap: ""
+  configMapFiles:
+    fluentd.conf: |
+      # Ignore fluentd own events
+      <match fluent.**>
+        @type null
+      </match>
+
+      @include fluentd-inputs.conf
+      @include fluentd-output.conf
+      {{- if .Values.metrics.enabled }}
+      @include metrics.conf
+      {{- end }}
+    fluentd-inputs.conf: |
+      # HTTP input for the liveness and readiness probes
+      <source>
+        @type http
+        port 9880
+      </source>
+      # Get the logs from the containers running in the node
+      <source>
+        @type tail
+        path /var/log/containers/*.log
+        # exclude Fluentd logs
+        exclude_path /var/log/containers/*fluentd*.log
+        pos_file /opt/bitnami/fluentd/logs/buffers/fluentd-docker.pos
+        tag kubernetes.*
+        read_from_head true
+        <parse>
+          @type json
+          time_key time
+          time_format %Y-%m-%dT%H:%M:%S.%NZ
+        </parse>
+      </source>
+      # enrich with kubernetes metadata
+      {{- if or .Values.forwarder.serviceAccount.create .Values.forwarder.serviceAccount.name }}
+      <filter kubernetes.**>
+        @type kubernetes_metadata
+      </filter>
+      {{- end }}
+    fluentd-output.conf: |
+      # Throw the healthcheck to the standard output instead of forwarding it
+      <match fluentd.healthcheck>
+        @type stdout
+      </match>
+      {{- if .Values.aggregator.enabled }}
+      # Forward all logs to the aggregators
+      <match **>
+        @type forward
+        {{- if .Values.tls.enabled }}
+        transport tls
+        tls_cert_path /opt/bitnami/fluentd/certs/out_forward/ca.crt
+        tls_client_cert_path /opt/bitnami/fluentd/certs/out_forward/tls.crt
+        tls_client_private_key_path /opt/bitnami/fluentd/certs/out_forward/tls.key
+        {{- end }}
+
+        {{- $fullName := (include "common.names.fullname" .) }}
+        {{- $global := . }}
+        {{- $domain := default "cluster.local" .Values.clusterDomain }}
+        {{- $port := .Values.aggregator.port | int }}
+        {{- range $i, $e := until (.Values.aggregator.replicaCount | int) }}
+        <server>
+          {{ printf "host %s-%d.%s-headless.%s.svc.%s" $fullName $i $fullName $global.Release.Namespace $domain }}
+          {{ printf "port %d" $port }}
+          {{- if ne $i 0 }}
+          standby
+          {{- end }}
+        </server>
+        {{- end }}
+        <buffer>
+          @type file
+          path /opt/bitnami/fluentd/logs/buffers/logs.buffer
+          flush_thread_count 2
+          flush_interval 5s
+        </buffer>
+      </match>
+      {{- else }}
+      # Send the logs to the standard output
+      <match **>
+        @type stdout
+      </match>
+      {{- end }}
+
+  extraArgs: ""
+
+  extraEnvVars: []
+
+  extraEnvVarsCM: ""
+
+  extraEnvVarsSecret: ""
+
+  containerPorts:
+    ## - name: syslog-tcp
+    ##   containerPort: 5140
+    ##   protocol: TCP
+    ## - name: syslog-udp
+    ##   containerPort: 5140
+    ##   protocol: UDP
+    ## - name: tcp
+    ##   containerPort: 24224
+    ##   protocol: TCP
+    - name: http
+      containerPort: 9880
+      protocol: TCP
+
+  service:
+    type: ClusterIP
+    ports:
+      ## syslog-udp:
+      ##   port: 5140
+      ##   targetPort: syslog-udp
+      ##   protocol: UDP
+      ##   nodePort: 31514
+      ## syslog-tcp:
+      ##   port: 5140
+      ##   targetPort: syslog-tcp
+      ##   protocol: TCP
+      ##   nodePort: 31514
+      ## tcp:
+      ##   port: 24224
+      ##   targetPort: tcp
+      ##   protocol: TCP
+      http:
+        port: 9880
+        targetPort: http
+        protocol: TCP
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    externalTrafficPolicy: Cluster
+    clusterIP: ""
+    annotations: {}
+    sessionAffinity: None
+    sessionAffinityConfig: {}
+
+  networkPolicy:
+    enabled: true
+    allowExternal: true
+    allowExternalEgress: true
+    kubeAPIServerPorts: [443, 6443, 8443]
+    extraIngress: []
+    extraEgress: []
+    ingressNSMatchLabels: {}
+    ingressNSPodMatchLabels: {}
+
+  startupProbe:
+    enabled: false
+    httpGet:
+      path: /fluentd.healthcheck?json=%7B%22ping%22%3A+%22pong%22%7D
+      port: http
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  livenessProbe:
+    enabled: true
+    tcpSocket:
+      port: http
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  readinessProbe:
+    enabled: true
+    httpGet:
+      path: /fluentd.healthcheck?json=%7B%22ping%22%3A+%22pong%22%7D
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  customStartupProbe: {}
+
+  customLivenessProbe: {}
+
+  customReadinessProbe: {}
+
+  updateStrategy:
+    type: RollingUpdate
+
+  resourcesPreset: "nano"
+
+  resources: {}
+
+  priorityClassName: ""
+
+  schedulerName: ""
+
+  topologySpreadConstraints: []
+
+  podAffinityPreset: ""
+
+  podAntiAffinityPreset: ""
+
+  nodeAffinityPreset:
+    type: ""
+    key: ""
+    values: []
+
+  affinity: {}
+
+  nodeSelector: {}
+
+  tolerations: []
+
+  podAnnotations: {}
+
+  podLabels: {}
+
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+    automountServiceAccountToken: false
+
+  rbac:
+    create: true
+    pspEnabled: false
+
+  persistence:
+    enabled: false
+    hostPath:
+      path: /opt/bitnami/fluentd/logs/buffers
+
+  command: []
+  args: []
+  lifecycleHooks: {}
+  initResourcePresets: "nano"
+  initResources: {}
+  initContainers: []
+  sidecars: []
+  extraVolumes: []
+  extraVolumeMounts: []
+  initScripts: {}
+  initScriptsCM: ""
+  initScriptsSecret: ""
+
+aggregator:
+
+  enabled: true
+  replicaCount: 1
+
+  podSecurityContext:
+    enabled: true
+    fsGroupChangePolicy: Always
+    sysctls: []
+    supplementalGroups: []
+    fsGroup: 1001
+
+  automountServiceAccountToken: false
+
+  hostAliases: []
+
+  containerSecurityContext:
+    enabled: true
+    privileged: false
+    seLinuxOptions: {}
+    runAsUser: 1001
+    runAsGroup: 1001
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: "RuntimeDefault"
+
+  terminationGracePeriodSeconds: 30
+
+  extraGems: []
+
+  configFile: fluentd.conf
+
+  configMap: ""
+
+  configMapFiles:
+    fluentd.conf: |
+      # Ignore fluentd own events
+      <match fluent.**>
+        @type null
+      </match>
+
+      @include fluentd-inputs.conf
+      @include fluentd-output.conf
+      {{- if .Values.metrics.enabled }}
+      @include metrics.conf
+      {{- end }}
+    fluentd-inputs.conf: |
+      # TCP input to receive logs from
+      {{- if .Values.aggregator.port }}
+      <source>
+        @type forward
+        bind 0.0.0.0
+        port {{ .Values.aggregator.port }}
+        {{- if .Values.tls.enabled }}
+        <transport tls>
+          ca_path /opt/bitnami/fluentd/certs/in_forward/ca.crt
+          cert_path /opt/bitnami/fluentd/certs/in_forward/tls.crt
+          private_key_path /opt/bitnami/fluentd/certs/in_forward/tls.key
+          client_cert_auth true
+        </transport>
+        {{- end }}
+      </source>
+      {{- end }}
+
+      # HTTP input for the liveness and readiness probes
+      <source>
+        @type http
+        bind 0.0.0.0
+        port 9880
+      </source>
+    fluentd-output.conf: |
+      # Throw the healthcheck to the standard output
+      <match fluentd.healthcheck>
+        @type stdout
+      </match>
+
+      # Send the logs to the standard output
+      <match **>
+        @type stdout
+      </match>
+    metrics.conf: |
+      # Prometheus Exporter Plugin
+      # input plugin that exports metrics
+      <source>
+        @type prometheus
+        port {{ .Values.metrics.service.port }}
+      </source>
+
+      # input plugin that collects metrics from MonitorAgent
+      <source>
+        @type prometheus_monitor
+        <labels>
+          host ${hostname}
+        </labels>
+      </source>
+
+      # input plugin that collects metrics for output plugin
+      <source>
+        @type prometheus_output_monitor
+        <labels>
+          host ${hostname}
+        </labels>
+      </source>
+
+  port: 24224
+
+  extraArgs: ""
+
+  extraEnvVars: []
+
+  extraEnvVarsCM: ""
+
+  extraEnvVarsSecret: ""
+
+  containerPorts:
+    # - name: my-port
+    #   containerPort: 24222
+    #   protocol: TCP
+    - name: http
+      containerPort: 9880
+      protocol: TCP
+  ## Service parameters
+  ##
+  service:
+
+    type: ClusterIP
+    ports:
+      http:
+        port: 9880
+        targetPort: http
+        protocol: TCP
+      tcp:
+        port: 24224
+        targetPort: tcp
+        protocol: TCP
+
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    clusterIP: ""
+    annotations: {}
+    externalTrafficPolicy: Cluster
+    sessionAffinity: None
+    sessionAffinityConfig: {}
+    annotationsHeadless: {}
+    headless:
+      annotations: {}
+
+  networkPolicy:
+    enabled: true
+    allowExternal: true
+    allowExternalEgress: true
+    extraIngress: []
+    extraEgress: []
+    ingressNSMatchLabels: {}
+    ingressNSPodMatchLabels: {}
+
+  ingress:
+    enabled: false
+    pathType: ImplementationSpecific
+    apiVersion: ""
+    hostname: fluentd.local
+    path: /
+    annotations: {}
+    tls: false
+    extraHosts: []
+    extraPaths: []
+    extraTls: []
+    secrets: []
+    ingressClassName: ""
+    extraRules: []
+
+  startupProbe:
+    enabled: true
+    httpGet:
+      path: /fluentd.healthcheck?json=%7B%22ping%22%3A+%22pong%22%7D
+      port: http
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  livenessProbe:
+    enabled: true
+    tcpSocket:
+      port: http
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  readinessProbe:
+    enabled: true
+    httpGet:
+      path: /fluentd.healthcheck?json=%7B%22ping%22%3A+%22pong%22%7D
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  customStartupProbe: {}
+  customLivenessProbe: {}
+  customReadinessProbe: {}
+
+  updateStrategy:
+    type: RollingUpdate
+
+  resourcesPreset: "nano"
+
+  resources: {}
+
+  priorityClassName: ""
+  schedulerName: ""
+  topologySpreadConstraints: []
+  podManagementPolicy: ""
+  podAffinityPreset: ""
+  podAntiAffinityPreset: soft
+
+  nodeAffinityPreset:
+    type: ""
+    key: ""
+    values: []
+
+  affinity: {}
+  nodeSelector: {}
+  tolerations: []
+  podAnnotations: {}
+  podLabels: {}
+
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+    automountServiceAccountToken: false
+
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 60
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 60
+    behavior: {}
+
+  persistence:
+    enabled: false
+
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+    selector: {}
+    annotations: {}
+  command: []
+  args: []
+  lifecycleHooks: {}
+  initResourcePresets: "nano"
+  initResources: {}
+  initContainers: []
+  sidecars: []
+  extraVolumes: []
+  extraVolumeMounts: []
+  extraVolumeClaimTemplates: []
+  initScripts: {}
+  initScriptsCM: ""
+  initScriptsSecret: ""
+
+  pdb:
+    create: true
+    minAvailable: ""
+    maxUnavailable: ""
+
+metrics:
+  enabled: false
+
+  service:
+    type: ClusterIP
+    port: 24231
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    externalTrafficPolicy: Cluster
+
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "24231"
+      prometheus.io/path: "/metrics"
+
+    sessionAffinity: None
+    sessionAffinityConfig: {}
+
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: ""
+    scrapeTimeout: ""
+    jobLabel: ""
+    relabelings: []
+    metricRelabelings: []
+    selector: {}
+    labels: {}
+    annotations: {}
+    honorLabels: false
+    path: "/metrics"
+
+tls:
+  enabled: false
+  autoGenerated: false
+  forwarder:
+    existingSecret: ""
+  aggregator:
+    existingSecret: ""
