@@ -84,8 +84,8 @@ diagnosticMode:
 ##
 image:
   registry: docker.io
-  repository: hanjinyang/fluentd
-  tag: latest
+  repository: bitnami/fluentd
+  tag: 1.18.0-debian-12-r18
   ## Specify a imagePullPolicy
   ## ref: https://kubernetes.io/docs/concepts/containers/images/#pre-pulled-images
   ##
@@ -851,31 +851,6 @@ aggregator:
       <match **>
         @type stdout
       </match>
-      
-      <match **>
-        @type elasticsearch
-        host opensearch-cluster-master.logging.svc.cluster.local
-        port 9200
-        scheme http
-        index_name fluentd-logs
-        logstash_format true
-        logstash_prefix fluentd
-        include_tag_key true
-        type_name _doc
-      
-        <buffer>
-          @type file
-          path /var/log/fluentd-buffers/opensearch
-          flush_mode interval
-          retry_type exponential_backoff
-          flush_interval 10s
-          retry_forever true
-          retry_max_interval 30
-          chunk_limit_size 2M
-          queue_limit_length 8
-        </buffer>
-      </match>
-
     metrics.conf: |
       # Prometheus Exporter Plugin
       # input plugin that exports metrics
@@ -994,7 +969,7 @@ aggregator:
   networkPolicy:
     ## @param aggregator.networkPolicy.enabled Specifies whether a NetworkPolicy should be created
     ##
-    enabled: false
+    enabled: true
     ## @param aggregator.networkPolicy.allowExternal Don't require server label for connections
     ## The Policy model to apply. When set to false, only pods with the correct
     ## server label will have network access to the ports server is listening
